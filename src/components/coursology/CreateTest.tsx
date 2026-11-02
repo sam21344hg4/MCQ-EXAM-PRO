@@ -765,65 +765,23 @@ export const CreateTest: React.FC<CreateTestProps> = ({
           </div>
 
           {!collapsed.step5 && (
-            <div className="p-6 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={1}
-                    max={maxBlockQuestions || 40}
-                    value={questionCount}
-                    onChange={(e) =>
-                      setQuestionCount(parseInt(e.target.value) || 0)
-                    }
-                    className="h-[32px] w-[52px] border border-[#ddd] text-[#313131] bg-[#ebebeb] text-center font-bold text-[14px] rounded outline-none focus:border-[#2196f3] focus:bg-white transition-colors"
-                  />
-                  <span className="text-[13.5px] text-[#65656a]">
-                    Max allowed per block
-                  </span>
-                  <span className="inline-block h-[21px] leading-[21px] rounded-full px-2 text-[12px] font-semibold text-[#4a4a4a] bg-[#e8e8e8]">
-                    {maxBlockQuestions}
-                  </span>
-                </div>
-
-                {/* Quick Presets */}
-                <div className="flex items-center gap-2">
-                  {[10, 20, 30, 40].map((num) => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() =>
-                        setQuestionCount(
-                          Math.min(num, totalAvailable || num)
-                        )
-                      }
-                      disabled={totalAvailable < num}
-                      className={`px-3 py-1 text-xs font-semibold rounded border transition-colors ${
-                        questionCount === num
-                          ? "bg-[#2196f3] text-white border-[#2196f3]"
-                          : "bg-white text-[#65656a] border-[#ddd] hover:bg-gray-50 disabled:opacity-40"
-                      }`}
-                    >
-                      {num}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setQuestionCount(Math.min(40, totalAvailable))
-                    }
-                    disabled={totalAvailable === 0}
-                    className="px-3 py-1 text-xs font-semibold rounded border bg-white text-[#65656a] border-[#ddd] hover:bg-gray-50 disabled:opacity-40"
-                  >
-                    Max
-                  </button>
-                </div>
-              </div>
-
-              <div className="text-xs text-[#828282]">
-                Total available matching selections:{" "}
-                <span className="font-semibold text-[#313131]">
-                  {totalAvailable.toLocaleString()}
+            <div className="p-6">
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={1}
+                  max={maxBlockQuestions || 40}
+                  value={questionCount}
+                  onChange={(e) =>
+                    setQuestionCount(parseInt(e.target.value) || 0)
+                  }
+                  className="h-[32px] w-[52px] border border-[#ddd] text-[#313131] bg-[#ebebeb] text-center font-bold text-[14px] rounded outline-none focus:border-[#2196f3] focus:bg-white transition-colors"
+                />
+                <span className="text-[13.5px] text-[#65656a]">
+                  Max allowed per block
+                </span>
+                <span className="inline-block h-[21px] leading-[21px] rounded-full px-2 text-[12px] font-semibold text-[#4a4a4a] bg-[#e8e8e8]">
+                  {maxBlockQuestions}
                 </span>
               </div>
             </div>
@@ -831,16 +789,9 @@ export const CreateTest: React.FC<CreateTestProps> = ({
         </div>
 
         {/* ==================================================== */}
-        {/* Step 6: Generate Test Action (UWorld custom-button)  */}
+        {/* Step 6: Generate Test Action                         */}
         {/* ==================================================== */}
-        <div className="flex items-center justify-between pt-2 pb-12">
-          <div className="text-[13.5px] text-[#65656a]">
-            Selected:{" "}
-            <span className="font-bold text-[#2196f3]">
-              {Math.min(questionCount, maxBlockQuestions)} Questions
-            </span>
-          </div>
-
+        <div className="pt-2 pb-12">
           <button
             type="button"
             disabled={totalAvailable === 0 || questionCount <= 0}
