@@ -33,10 +33,13 @@ export const OptionButton = ({
   };
 
   return (
-    <div className="classic-option-row flex items-center justify-between" onContextMenu={handleContextMenu}>
+    <div
+      className="classic-option-row flex items-center justify-between"
+      onContextMenu={handleContextMenu}
+    >
       <label
         className={cn(
-          "classic-option flex-1",
+          "classic-option flex-1 cursor-pointer",
           isSelected && "is-selected",
           showResult && isCorrect && "is-correct",
           showResult && isSelected && !isCorrect && "is-incorrect",
@@ -57,11 +60,14 @@ export const OptionButton = ({
         </span>
       </label>
 
+      {/* Peer Response Rate in Review / Explanation Mode */}
       {showResult && typeof peerPercent === "number" && (
         <span
           className={cn(
             "ml-3 px-2 py-0.5 rounded text-xs font-bold shrink-0",
-            isCorrect ? "bg-green-100 text-green-800 border border-green-300" : "bg-gray-100 text-gray-700 border border-gray-200"
+            isCorrect
+              ? "bg-green-100 text-green-800 border border-green-300"
+              : "bg-gray-100 text-gray-700 border border-gray-200"
           )}
           title="Peer Response Rate"
         >
@@ -69,20 +75,16 @@ export const OptionButton = ({
         </span>
       )}
 
-      {!showResult && onToggleStrikethrough ? (
+      {/* Struck Indicator / Unstrike Button: only shows when an option is struck out */}
+      {!showResult && onToggleStrikethrough && isStrikethrough ? (
         <button
           type="button"
-          className="classic-strike-button shrink-0"
-          aria-label={isStrikethrough ? `Remove strikeout from option ${label}` : `Strike out option ${label}`}
-          aria-pressed={isStrikethrough}
-          title={isStrikethrough ? `Remove strikeout from option ${label}` : `Strike out option ${label}`}
           onClick={onToggleStrikethrough}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            onToggleStrikethrough();
-          }}
+          className="ml-3 px-2 py-0.5 text-[11px] font-semibold text-gray-400 hover:text-red-600 border border-gray-200 hover:border-red-300 rounded shrink-0 transition-colors"
+          title={`Remove strikethrough from option ${label}`}
+          aria-label={`Remove strikethrough from option ${label}`}
         >
-          <span className="classic-strike-glyph" aria-hidden="true">ab</span>
+          Restore
         </button>
       ) : null}
     </div>
