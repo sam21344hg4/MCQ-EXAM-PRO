@@ -5,10 +5,13 @@ body,
 }
 
 body {
-  overflow: hidden;
   background: #fff;
   color: #000;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+body:has(.classic-exam-shell) {
+  overflow: hidden;
 }
 
 .classic-exam-shell {
