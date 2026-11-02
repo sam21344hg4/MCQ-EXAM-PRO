@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Contrast, Flag, Search, X, Award, BarChart2 } from "lucide-react";
+import { Contrast, Search, X, Award } from "lucide-react";
 import { Question } from "@/data/examQuestions";
 import { OptionButton } from "./OptionButton";
 import { useExamUI } from "./ExamUIProvider";
@@ -82,6 +82,30 @@ export const QuestionCard = ({
     if (isZoomOpen) closePopup("zoom");
   }, [question.id]);
 
+  const isHtmlStem = useMemo(() => {
+    return typeof question.stem === "string" && /<[a-z][\s\S]*>/i.test(question.stem);
+  }, [question.stem]);
+
+  // Clean HTML stem with highlighting
+  const cleanStemHtml = useMemo(() => {
+    if (!isHtmlStem) return "";
+    let html = question.stem || "";
+    // Remove markjs scraper tags
+    html = html.replace(/<mark[^>]*data-markjs="true"[^>]*>(.*?)<\/mark>/gi, "$1");
+    // Inject active user highlights into text nodes
+    if (highlights.length > 0) {
+      highlights.forEach((hl) => {
+        if (hl && hl.length >= 2) {
+          const escaped = hl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const regex = new RegExp(`(?![^<]*>)(${escaped})`, "gi");
+          html = html.replace(regex, `<mark class="classic-highlight cursor-pointer" title="Click to remove highlight">$1</mark>`);
+        }
+      });
+    }
+    return html;
+  }, [question.stem, isHtmlStem, highlights]);
+
+  // Plain text fallback with highlighting
   const highlightedStem = useMemo(() => {
     if (highlights.length === 0) return question.stem;
     const unique = Array.from(new Set(highlights.filter(Boolean))).sort((a, b) => b.length - a.length);
@@ -229,9 +253,24 @@ export const QuestionCard = ({
       >
         <div className="classic-stem-area" onMouseUp={handleSelectionMouseUp}>
           <div className="classic-stem-main">
-            <div ref={stemRef} className="classic-stem-text">
-              {highlightedStem}
-            </div>
+            {/* Render HTML or Plain text stem */}
+            {isHtmlStem ? (
+              <div
+                ref={stemRef}
+                className="classic-stem-text qbank-rich-content leading-relaxed text-sm text-[#222]"
+                dangerouslySetInnerHTML={{ __html: cleanStemHtml }}
+                onClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (target && target.tagName === "MARK") {
+                    onRemoveHighlight?.(target.textContent || "");
+                  }
+                }}
+              />
+            ) : (
+              <div ref={stemRef} className="classic-stem-text">
+                {highlightedStem}
+              </div>
+            )}
 
             {question.image ? (
               <figure className="classic-image-container">
