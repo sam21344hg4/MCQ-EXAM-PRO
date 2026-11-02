@@ -7,10 +7,83 @@ import { QuestionStatusPanel } from "@/components/QuestionStatusPanel";
 import { ExamSummary } from "@/components/ExamSummary";
 import { BlockReview } from "@/components/BlockReview";
 import { useExamUI } from "@/components/ExamUIProvider";
+import { CreateTest, GeneratedTestConfig } from "@/components/coursology/CreateTest";
 
-type ExamMode = "start" | "timed" | "practice" | "complete" | "review";
+type ExamMode = "start" | "timed" | "practice" | "complete" | "review" | "create-test";
 
 const Index = () => {
+  const handleStartGeneratedTest = useCallback(async (config: GeneratedTestConfig) => {
+    try {
+      const loadedQuestions = await Promise.all(
+        config.questions.map(async (meta) => {
+          try {
+            const res = await fetch(`/qbank/q_${meta.id}.json`);
+            if (res.ok) {
+              const data = await res.json();
+              return {
+                id: meta.id,
+                stem: data.stem || `Question ID: ${meta.id} - ${meta.topic}`,
+                options: data.options || [],
+                correctAnswer: data.correctAnswer || meta.correctAnswer || "A",
+                explanation: data.explanation || "",
+                educationalObjective: data.educationalObjective || "",
+                image: data.image,
+                imageCaption: data.imageCaption,
+              };
+            }
+          } catch (e) {
+            console.error("Failed to load question", meta.id, e);
+          }
+          return {
+            id: meta.id,
+            stem: `Question ID: ${meta.id} - ${meta.topic}`,
+            options: [
+              { label: "A", text: "Option A" },
+              { label: "B", text: "Option B" },
+              { label: "C", text: "Option C" },
+              { label: "D", text: "Option D" },
+            ],
+            correctAnswer: meta.correctAnswer || "A",
+            explanation: `Topic: ${meta.topic} (${meta.subject})`,
+            educationalObjective: `Understanding ${meta.topic}.`,
+          };
+        })
+      );
+
+      const customExam: ExamData = {
+        id: `qbank-custom-${Date.now()}`,
+        title: config.testName,
+        section: "USMLE Step 1 QBank",
+        totalQuestions: loadedQuestions.length,
+        timeLimit: Math.max(1, Math.round(loadedQuestions.length * 1.5)),
+        sections: [
+          {
+            itemCount: loadedQuestions.length,
+            timeLimitMinutes: Math.max(1, Math.round(loadedQuestions.length * 1.5)),
+          },
+        ],
+        questions: loadedQuestions,
+      };
+
+      setSelectedExam(customExam);
+      setAnswers({});
+      setFlagged(new Set());
+      setNotes({});
+      setHighlights({});
+      setStrikethroughs(new Set());
+      setCurrentQuestion(loadedQuestions[0]?.id || 1);
+      setCurrentSection(1);
+      setTimeSpent(0);
+      setTimeRemaining(customExam.timeLimit * 60);
+      setShowExplanation(config.testMode === "tutor");
+      setShowBlockReview(false);
+      setIsPaused(false);
+      setMode(config.testMode === "tutor" ? "practice" : "timed");
+    } catch (err) {
+      console.error("Error generating test:", err);
+    }
+  }, []);
+
   const { activePopup, closePopup, closeCalculator } = useExamUI();
   const [selectedExam, setSelectedExam] = useState<ExamData>(availableExams[0]);
   const [mode, setMode] = useState<ExamMode>("start");
@@ -319,8 +392,21 @@ const Index = () => {
     scrollExamTop();
   }, [dismissTransientTools, scrollExamTop]);
 
+  if (mode === "create-test") {
+    return <CreateTest onStartGeneratedTest={handleStartGeneratedTest} onCancel={() => setMode("start")} />;
+  }
+
   if (mode === "start") {
-    return <StartScreen exams={availableExams} selectedExam={selectedExam} onSelectExam={handleSelectExam} onStart={handleStart} onPractice={handlePractice} />;
+    return (
+      <StartScreen
+        exams={availableExams}
+        selectedExam={selectedExam}
+        onSelectExam={handleSelectExam}
+        onStart={handleStart}
+        onPractice={handlePractice}
+        onCreateTest={() => setMode("create-test")}
+      />
+    );
   }
 
   if (mode === "complete") {

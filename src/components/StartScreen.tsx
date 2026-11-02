@@ -16,6 +16,7 @@ interface StartScreenProps {
   onSelectExam: (examId: string) => void;
   onStart: () => void;
   onPractice: () => void;
+  onCreateTest?: () => void;
 }
 
 export const StartScreen = ({
@@ -24,6 +25,7 @@ export const StartScreen = ({
   onSelectExam,
   onStart,
   onPractice,
+  onCreateTest,
 }: StartScreenProps) => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-accent/20">
@@ -60,6 +62,35 @@ export const StartScreen = ({
 
           {/* Content */}
           <div className="p-8">
+            {/* Coursology USMLE 1 QBank Callout */}
+            {onCreateTest && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
+                onClick={onCreateTest}
+                className="mb-6 p-4 rounded-xl border-2 border-primary/40 bg-primary/5 hover:bg-primary/10 hover:border-primary transition-all cursor-pointer shadow-sm group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-lg bg-primary text-primary-foreground group-hover:scale-105 transition-transform">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="font-bold text-foreground text-sm">USMLE Step 1 QBank</h3>
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 bg-primary/20 text-primary rounded-full">New</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">3,660 Questions • Custom Test Creator</p>
+                    </div>
+                  </div>
+                  <Button size="sm" className="font-semibold shadow-sm pointer-events-none">
+                    Create Test
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
             {/* Exam Selector */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}

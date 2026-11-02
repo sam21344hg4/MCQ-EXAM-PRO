@@ -189,7 +189,14 @@ export const QuestionCard = ({
         <div ref={stemRef} className="classic-question-stem" onMouseUp={handleStemMouseUp}>
           <span className="classic-question-number">{displayNumber}.</span>
           <div>
-            <p>{highlightedStem}</p>
+            {typeof question.stem === "string" && /<[a-z][\s\S]*>/i.test(question.stem) ? (
+              <div
+                className="qbank-rich-content text-left"
+                dangerouslySetInnerHTML={{ __html: question.stem }}
+              />
+            ) : (
+              <p>{highlightedStem}</p>
+            )}
             {question.image ? (
               <figure className="classic-question-image">
                 <div className="classic-image-frame source-media-gallery">
@@ -259,7 +266,14 @@ export const QuestionCard = ({
         {showExplanation ? (
           <div className={`classic-explanation ${isCorrect ? "correct" : "incorrect"}`}>
             <strong>{isCorrect ? "Correct" : `Correct answer: ${question.correctAnswer}`}</strong>
-            <p>{question.explanation}</p>
+            {typeof question.explanation === "string" && /<[a-z][\s\S]*>/i.test(question.explanation) ? (
+              <div
+                className="qbank-rich-content text-left my-2"
+                dangerouslySetInnerHTML={{ __html: question.explanation }}
+              />
+            ) : (
+              <p>{question.explanation}</p>
+            )}
             <p><strong>Educational Objective:</strong> {question.educationalObjective}</p>
           </div>
         ) : null}
