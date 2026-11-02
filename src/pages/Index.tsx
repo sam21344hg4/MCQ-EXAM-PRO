@@ -8,20 +8,58 @@ import { ExamSummary } from "@/components/ExamSummary";
 import { BlockReview } from "@/components/BlockReview";
 import { useExamUI } from "@/components/ExamUIProvider";
 import { CreateTest, GeneratedTestConfig } from "@/components/coursology/CreateTest";
+import { FlashcardModal, Flashcard } from "@/components/coursology/FlashcardModal";
+import { NotebookModal, NotebookEntry } from "@/components/coursology/NotebookModal";
+import { FeedbackModal } from "@/components/coursology/FeedbackModal";
+import { TutorialModal } from "@/components/coursology/TutorialModal";
 
 type ExamMode = "start" | "timed" | "practice" | "complete" | "review" | "create-test";
 
 const Index = () => {
+  const [currentTestId, setCurrentTestId] = useState<string>("200561420");
+  const [testSubMode, setTestSubMode] = useState<string>("TIMED");
+
+  // Flashcards state with LocalStorage persistence
+  const [flashcards, setFlashcards] = useState<Flashcard[]>(() => {
+    try {
+      const saved = localStorage.getItem("medimedia_flashcards");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Notebook state with LocalStorage persistence
+  const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem("medimedia_notebook");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [flashcardPrefill, setFlashcardPrefill] = useState<string>("");
+  const [notebookPrefill, setNotebookPrefill] = useState<string>("");
+
   const handleStartGeneratedTest = useCallback(async (config: GeneratedTestConfig) => {
     try {
+      const generatedId = String(Math.floor(100000000 + Math.random() * 900000000));
+      setCurrentTestId(generatedId);
+      setTestSubMode(config.testMode.toUpperCase());
+
       const loadedQuestions = await Promise.all(
-        config.questions.map(async (meta) => {
+        config.questions.map(async (meta, index) => {
           try {
             const res = await fetch(`/qbank/q_${meta.id}.json`);
             if (res.ok) {
               const data = await res.json();
               return {
-                id: meta.id,
+                id: index + 1, // 1-based sequential index for engine navigation
+                qid: meta.id,  // Authentic database QID (e.g. 19624)
+                subject: meta.subject,
+                system: meta.system,
+                topic: meta.topic,
                 stem: data.stem || `Question ID: ${meta.id} - ${meta.topic}`,
                 options: data.options || [],
                 correctAnswer: data.correctAnswer || meta.correctAnswer || "A",
@@ -29,13 +67,18 @@ const Index = () => {
                 educationalObjective: data.educationalObjective || "",
                 image: data.image,
                 imageCaption: data.imageCaption,
+                peerStats: meta.peerCorrect ? { [meta.correctAnswer]: Math.round(Number(meta.peerCorrect)) } : undefined,
               };
             }
           } catch (e) {
             console.error("Failed to load question", meta.id, e);
           }
           return {
-            id: meta.id,
+            id: index + 1,
+            qid: meta.id,
+            subject: meta.subject,
+            system: meta.system,
+            topic: meta.topic,
             stem: `Question ID: ${meta.id} - ${meta.topic}`,
             options: [
               { label: "A", text: "Option A" },
@@ -46,12 +89,13 @@ const Index = () => {
             correctAnswer: meta.correctAnswer || "A",
             explanation: `Topic: ${meta.topic} (${meta.subject})`,
             educationalObjective: `Understanding ${meta.topic}.`,
+            peerStats: meta.peerCorrect ? { [meta.correctAnswer]: Math.round(Number(meta.peerCorrect)) } : undefined,
           };
         })
       );
 
       const customExam: ExamData = {
-        id: `qbank-custom-${Date.now()}`,
+        id: `qbank-custom-${generatedId}`,
         title: config.testName,
         section: "USMLE Step 1 QBank",
         totalQuestions: loadedQuestions.length,
@@ -71,7 +115,7 @@ const Index = () => {
       setNotes({});
       setHighlights({});
       setStrikethroughs(new Set());
-      setCurrentQuestion(loadedQuestions[0]?.id || 1);
+      setCurrentQuestion(1);
       setCurrentSection(1);
       setTimeSpent(0);
       setTimeRemaining(customExam.timeLimit * 60);
@@ -84,7 +128,7 @@ const Index = () => {
     }
   }, []);
 
-  const { activePopup, closePopup, closeCalculator } = useExamUI();
+  const { activePopup, openPopup, closePopup, closeCalculator } = useExamUI();
   const [selectedExam, setSelectedExam] = useState<ExamData>(availableExams[0]);
   const [mode, setMode] = useState<ExamMode>("start");
   const [currentQuestion, setCurrentQuestion] = useState(1);
@@ -236,11 +280,15 @@ const Index = () => {
 
   const handleStart = useCallback(() => {
     resetSessionState();
+    setCurrentTestId("200561420");
+    setTestSubMode("TIMED");
     setMode("timed");
   }, [resetSessionState]);
 
   const handlePractice = useCallback(() => {
     resetSessionState();
+    setCurrentTestId("200561420");
+    setTestSubMode("TUTOR");
     setMode("practice");
   }, [resetSessionState]);
 
@@ -262,25 +310,25 @@ const Index = () => {
   }, [currentSection, effectiveTotalSections, sectionStart, sectionTime, dismissTransientTools, scrollExamTop]);
 
   const handleEndBlock = useCallback(() => {
-    if (mode === "timed") handleEndSection();
-    else {
+    if (mode === "practice") {
       setMode("complete");
-      setShowBlockReview(false);
-      dismissTransientTools();
+      return;
     }
-  }, [mode, handleEndSection, dismissTransientTools]);
+    setShowBlockReview(true);
+  }, [mode]);
 
   const handleSelectAnswer = useCallback((answer: string) => {
     if (mode === "review") return;
     const strikeKey = `${currentQuestion}-${answer}`;
-    setStrikethroughs((previous) => {
-      if (!previous.has(strikeKey)) return previous;
-      const next = new Set(previous);
-      next.delete(strikeKey);
-      return next;
-    });
+    if (strikethroughs.has(strikeKey)) {
+      setStrikethroughs((previous) => {
+        const next = new Set(previous);
+        next.delete(strikeKey);
+        return next;
+      });
+    }
     setAnswers((previous) => ({ ...previous, [currentQuestion]: answer }));
-  }, [currentQuestion, mode]);
+  }, [currentQuestion, mode, strikethroughs]);
 
   const handleNext = useCallback(() => {
     if (showBlockReview) return;
@@ -376,6 +424,70 @@ const Index = () => {
     });
   }, [currentQuestion]);
 
+  // Flashcards Handlers
+  const handleAddFlashcard = useCallback((card: Omit<Flashcard, "id" | "createdAt">) => {
+    const newCard: Flashcard = {
+      ...card,
+      id: `fc-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      createdAt: Date.now(),
+    };
+    setFlashcards((prev) => {
+      const next = [newCard, ...prev];
+      try {
+        localStorage.setItem("medimedia_flashcards", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const handleDeleteFlashcard = useCallback((id: string) => {
+    setFlashcards((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      try {
+        localStorage.setItem("medimedia_flashcards", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  // Notebook Handlers
+  const handleSaveNotebookEntry = useCallback((entry: Omit<NotebookEntry, "id" | "updatedAt"> & { id?: string }) => {
+    setNotebookEntries((prev) => {
+      let next: NotebookEntry[];
+      if (entry.id) {
+        next = prev.map((e) =>
+          e.id === entry.id
+            ? { ...e, title: entry.title, content: entry.content, updatedAt: Date.now() }
+            : e
+        );
+      } else {
+        const newEntry: NotebookEntry = {
+          id: `nb-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          qid: entry.qid,
+          questionNumber: entry.questionNumber,
+          title: entry.title,
+          content: entry.content,
+          updatedAt: Date.now(),
+        };
+        next = [newEntry, ...prev];
+      }
+      try {
+        localStorage.setItem("medimedia_notebook", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const handleDeleteNotebookEntry = useCallback((id: string) => {
+    setNotebookEntries((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      try {
+        localStorage.setItem("medimedia_notebook", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const handleRestart = useCallback(() => {
     resetSessionState();
     setMode("start");
@@ -384,6 +496,7 @@ const Index = () => {
   const handlePostExamReview = useCallback(() => {
     dismissTransientTools();
     setMode("review");
+    setTestSubMode("REVIEW");
     setCurrentQuestion(1);
     setCurrentSection(1);
     setShowExplanation(true);
@@ -391,6 +504,40 @@ const Index = () => {
     setIsPaused(false);
     scrollExamTop();
   }, [dismissTransientTools, scrollExamTop]);
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    if (mode === "start" || mode === "create-test" || mode === "complete") return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is currently typing in an input or textarea
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+
+      if (e.key === "j" || e.key === "J" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        handlePrevious();
+      } else if (e.key === "k" || e.key === "K" || e.key === "ArrowRight") {
+        e.preventDefault();
+        handleNext();
+      } else if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        handleFlag();
+      } else if (["1", "2", "3", "4", "5"].includes(e.key)) {
+        const choiceLabels = ["A", "B", "C", "D", "E"];
+        const label = choiceLabels[parseInt(e.key) - 1];
+        if (label && question.options.some((o) => o.label === label)) {
+          e.preventDefault();
+          handleSelectAnswer(label);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mode, handlePrevious, handleNext, handleFlag, handleSelectAnswer, question]);
 
   if (mode === "create-test") {
     return <CreateTest onStartGeneratedTest={handleStartGeneratedTest} onCancel={() => setMode("start")} />;
@@ -429,6 +576,9 @@ const Index = () => {
 
       <ExamHeader
         currentQuestion={currentQuestion}
+        qid={question.qid}
+        testId={currentTestId}
+        examMode={mode === "review" ? "REVIEW" : testSubMode}
         timeRemaining={timeRemaining}
         timeSpent={timeSpent}
         onPrevious={handlePrevious}
@@ -449,17 +599,47 @@ const Index = () => {
         canNext={canNext}
         note={notes[currentQuestion] || ""}
         onNoteChange={handleNoteChange}
+        isFlagged={flagged.has(currentQuestion)}
+        onToggleFlag={handleFlag}
+        flashcardCount={flashcards.length}
+        onOpenFlashcards={() => {
+          setFlashcardPrefill("");
+          openPopup("flashcards");
+        }}
+        onOpenNotebook={() => {
+          setNotebookPrefill("");
+          openPopup("notebook");
+        }}
+        onOpenFeedback={() => openPopup("feedback")}
+        onOpenTutorial={() => openPopup("tutorial")}
       />
 
       {!showBlockReview ? (
         <div id="classic-status">
-          <QuestionStatusPanel sectionStart={sectionInfo.start} sectionEnd={sectionInfo.end} currentQuestion={currentQuestion} answers={answers} flagged={flagged} notes={notes} onNavigate={handleNavigate} />
+          <QuestionStatusPanel
+            sectionStart={sectionInfo.start}
+            sectionEnd={sectionInfo.end}
+            currentQuestion={currentQuestion}
+            answers={answers}
+            flagged={flagged}
+            notes={notes}
+            onNavigate={handleNavigate}
+          />
         </div>
       ) : null}
 
       <main id="classic-main" className="classic-exam-main" aria-live="polite">
         {showBlockReview ? (
-          <BlockReview sectionStart={sectionInfo.start} sectionEnd={sectionInfo.end} currentQuestion={currentQuestion} answers={answers} flagged={flagged} onNavigate={handleNavigate} onReturn={() => setShowBlockReview(false)} onEndBlock={handleEndBlock} />
+          <BlockReview
+            sectionStart={sectionInfo.start}
+            sectionEnd={sectionInfo.end}
+            currentQuestion={currentQuestion}
+            answers={answers}
+            flagged={flagged}
+            onNavigate={handleNavigate}
+            onReturn={() => setShowBlockReview(false)}
+            onEndBlock={handleEndBlock}
+          />
         ) : (
           <QuestionCard
             question={question}
@@ -476,19 +656,73 @@ const Index = () => {
             highlights={highlights[currentQuestion] || []}
             onAddHighlight={handleAddHighlight}
             onRemoveHighlight={handleRemoveHighlight}
+            onAddFlashcard={(text) => {
+              setFlashcardPrefill(text);
+              openPopup("flashcards");
+            }}
+            onAddNotebook={(text) => {
+              setNotebookPrefill(text);
+              openPopup("notebook");
+            }}
           />
         )}
       </main>
 
+      {/* Paused Overlay */}
       {isPaused ? (
-        <div className="classic-pause-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
-          <section className="classic-pause-card">
-            <h2 id="pause-title">Exam Paused</h2>
-            <p>The timer is stopped while this simulator is paused.</p>
-            <button type="button" autoFocus onClick={() => setIsPaused(false)}>Resume</button>
+        <div className="classic-pause-overlay fixed inset-0 z-[150] bg-black/90 flex items-center justify-center p-4">
+          <section className="bg-white rounded-lg p-8 max-w-sm w-full text-center shadow-2xl border border-gray-300">
+            <h2 id="pause-title" className="text-xl font-bold text-[#004976] mb-2">Test Paused</h2>
+            <p className="text-sm text-gray-600 mb-6">The exam timer is stopped while paused.</p>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setIsPaused(false)}
+              className="w-full py-2.5 bg-[#2196f3] hover:bg-[#1976d2] text-white font-bold text-sm rounded shadow transition-colors"
+            >
+              Resume Test
+            </button>
           </section>
         </div>
       ) : null}
+
+      {/* Modals from UWorld QBank Demo */}
+      <FlashcardModal
+        isOpen={activePopup === "flashcards"}
+        onClose={() => closePopup("flashcards")}
+        currentQid={question.qid}
+        currentQuestionNumber={currentQuestion}
+        flashcards={flashcards}
+        onAddFlashcard={handleAddFlashcard}
+        onDeleteFlashcard={handleDeleteFlashcard}
+        prefillFront={flashcardPrefill}
+      />
+
+      <NotebookModal
+        isOpen={activePopup === "notebook"}
+        onClose={() => closePopup("notebook")}
+        currentQid={question.qid}
+        currentQuestionNumber={currentQuestion}
+        entries={notebookEntries}
+        onSaveEntry={handleSaveNotebookEntry}
+        onDeleteEntry={handleDeleteNotebookEntry}
+        prefillContent={notebookPrefill}
+      />
+
+      <FeedbackModal
+        isOpen={activePopup === "feedback"}
+        onClose={() => closePopup("feedback")}
+        currentQid={question.qid}
+        currentQuestionNumber={currentQuestion}
+      />
+
+      <TutorialModal
+        isOpen={activePopup === "tutorial" || activePopup === "help"}
+        onClose={() => {
+          if (activePopup === "tutorial") closePopup("tutorial");
+          if (activePopup === "help") closePopup("help");
+        }}
+      />
     </div>
   );
 };

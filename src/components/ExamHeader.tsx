@@ -1,5 +1,22 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, LockKeyhole, Menu, Pause, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Flag,
+  LockKeyhole,
+  Maximize2,
+  Menu,
+  Minimize2,
+  Moon,
+  Pause,
+  Sun,
+  Type,
+  X,
+  Layers,
+  BookOpen,
+  MessageSquare,
+  HelpCircle,
+} from "lucide-react";
 import { Calculator } from "./Calculator";
 import { CoordinatedLabValues } from "./CoordinatedLabValues";
 import { Notes } from "./Notes";
@@ -14,6 +31,9 @@ export interface ExamSectionMeta {
 
 interface ExamHeaderProps {
   currentQuestion: number;
+  qid?: number | string;
+  testId?: string;
+  examMode?: string;
   timeRemaining: number;
   timeSpent: number;
   onPrevious: () => void;
@@ -34,6 +54,13 @@ interface ExamHeaderProps {
   canNext: boolean;
   note: string;
   onNoteChange: (itemId: number, note: string) => void;
+  isFlagged?: boolean;
+  onToggleFlag?: () => void;
+  flashcardCount?: number;
+  onOpenFlashcards?: () => void;
+  onOpenNotebook?: () => void;
+  onOpenFeedback?: () => void;
+  onOpenTutorial?: () => void;
 }
 
 const formatClock = (seconds: number) => {
@@ -54,6 +81,9 @@ const formatLongTime = (seconds: number) => {
 
 export const ExamHeader = ({
   currentQuestion,
+  qid,
+  testId,
+  examMode = "TIMED",
   timeRemaining,
   timeSpent,
   onPrevious,
@@ -74,6 +104,13 @@ export const ExamHeader = ({
   canNext,
   note,
   onNoteChange,
+  isFlagged = false,
+  onToggleFlag,
+  flashcardCount = 0,
+  onOpenFlashcards,
+  onOpenNotebook,
+  onOpenFeedback,
+  onOpenTutorial,
 }: ExamHeaderProps) => {
   const {
     activePopup,
@@ -84,14 +121,17 @@ export const ExamHeader = ({
     setShowStrikeout,
     textZoom,
     setTextZoom,
+    cycleTextZoom,
     darkTheme,
     setDarkTheme,
+    toggleDarkTheme,
   } = useExamUI();
 
   const [showResizeMenu, setShowResizeMenu] = useState(false);
   const [showColorMenu, setShowColorMenu] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const itemInSection = currentQuestion - sectionStart + 1;
+  const itemInSection = Math.max(1, currentQuestion - sectionStart + 1);
   const itemsInSection = Math.max(sectionEnd - sectionStart + 1, 0);
   const unanswered = Math.max(itemsInSection - answeredInSection, 0);
   const blockElapsed = showTimer ? Math.max(sectionTimeLimitSeconds - timeRemaining, 0) : timeSpent;
@@ -99,24 +139,27 @@ export const ExamHeader = ({
   const dayElapsed = showTimer ? Math.min(timeSpent, dayTimeLimitSeconds) : timeSpent;
 
   useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
+  useEffect(() => {
     if (activePopup !== "settings") {
       setShowResizeMenu(false);
       setShowColorMenu(false);
     }
   }, [activePopup]);
-
-  useEffect(() => {
-    if (activePopup !== "settings") return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || (!showResizeMenu && !showColorMenu)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      setShowResizeMenu(false);
-      setShowColorMenu(false);
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [activePopup, showResizeMenu, showColorMenu]);
 
   const confirmEndBlock = () => {
     closePopup("end");
@@ -126,17 +169,44 @@ export const ExamHeader = ({
   return (
     <>
       <header className="classic-exam-header source-exam-header" role="banner">
-        <button
-          type="button"
-          className={`classic-header-stats source-item-info-trigger ${activePopup === "overview" ? "is-open" : ""}`}
-          aria-expanded={activePopup === "overview"}
-          onClick={() => togglePopup("overview")}
-          title="Item Information"
-        >
-          <span>Item: {itemInSection} of {itemsInSection}</span>
-          <span>Block: {currentSection} of {totalSections}</span>
-        </button>
+        {/* Left: Item Index & QID */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={`classic-header-stats source-item-info-trigger ${activePopup === "overview" ? "is-open" : ""}`}
+            aria-expanded={activePopup === "overview"}
+            onClick={() => togglePopup("overview")}
+            title="Item Information & Overview"
+          >
+            <span>Item: {itemInSection} of {itemsInSection}</span>
+            {qid ? (
+              <span className="text-[11px] font-normal opacity-90 text-[#a0e2fc]">
+                Question Id: {qid}
+              </span>
+            ) : (
+              <span>Block: {currentSection} of {totalSections}</span>
+            )}
+          </button>
 
+          {/* Mark Button */}
+          {onToggleFlag && (
+            <button
+              type="button"
+              onClick={onToggleFlag}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded border transition-colors ${
+                isFlagged
+                  ? "bg-[#ff9800] text-white border-[#f57c00] shadow-xs"
+                  : "bg-white/10 text-white/90 border-white/20 hover:bg-white/20"
+              }`}
+              title={isFlagged ? "Unmark Question" : "Mark Question"}
+            >
+              <Flag className="h-3.5 w-3.5" fill={isFlagged ? "currentColor" : "none"} />
+              <span>Mark</span>
+            </button>
+          )}
+        </div>
+
+        {/* Center: Navigation */}
         <nav className="classic-header-navigation" aria-label="Question navigation">
           <button type="button" onClick={onPrevious} disabled={!canPrevious} title="Previous">
             <ChevronLeft aria-hidden="true" /><span>Previous</span>
@@ -147,10 +217,58 @@ export const ExamHeader = ({
           </button>
         </nav>
 
+        {/* Right: Tools Bar */}
         <div className="classic-header-tools" aria-label="Exam tools">
+          {/* Full Screen */}
+          <button
+            type="button"
+            onClick={toggleFullScreen}
+            className="hidden md:flex items-center gap-1 px-2.5 py-1 text-xs text-white/90 hover:text-white rounded hover:bg-white/10 transition-colors"
+            title="Full Screen"
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            <span className="hidden xl:inline">Full Screen</span>
+          </button>
+
+          {/* Tutorial / Help */}
+          <button
+            type="button"
+            onClick={onOpenTutorial || (() => openPopup("help"))}
+            className="hidden md:flex items-center gap-1 px-2.5 py-1 text-xs text-white/90 hover:text-white rounded hover:bg-white/10 transition-colors"
+            title="Tutorial & Shortcuts"
+          >
+            <HelpCircle className="h-4 w-4 text-[#88cee7]" />
+            <span className="hidden xl:inline">Tutorial</span>
+          </button>
+
           <div className="classic-header-tool-slot"><CoordinatedLabValues /></div>
           <div className="classic-header-tool-slot"><Notes itemId={currentQuestion} notes={note} onNotesChange={onNoteChange} /></div>
           <div className="classic-header-tool-slot"><Calculator /></div>
+
+          {/* Reverse Color (Dark/Light Mode) */}
+          <button
+            type="button"
+            onClick={toggleDarkTheme}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs text-white/90 hover:text-white rounded hover:bg-white/10 transition-colors"
+            title="Reverse Color / Night Mode"
+          >
+            {darkTheme ? <Sun className="h-4 w-4 text-amber-300" /> : <Moon className="h-4 w-4" />}
+            <span className="hidden xl:inline">Reverse Color</span>
+          </button>
+
+          {/* Text Zoom */}
+          <button
+            type="button"
+            onClick={cycleTextZoom}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs text-white/90 hover:text-white rounded hover:bg-white/10 transition-colors"
+            title={`Text Zoom (${textZoom}%)`}
+          >
+            <Type className="h-4 w-4" />
+            <span className="hidden xl:inline">Text Zoom</span>
+            <span className="text-[10px] bg-white/20 px-1 rounded">{textZoom}%</span>
+          </button>
+
+          {/* Settings Menu */}
           <div className="classic-settings-wrap">
             <button
               type="button"
@@ -194,15 +312,26 @@ export const ExamHeader = ({
                 <button type="button" role="menuitemcheckbox" aria-checked={showStrikeout} onClick={() => setShowStrikeout(!showStrikeout)}>
                   <span>Show/Hide Strikeout</span>
                 </button>
-                <button type="button" role="menuitem" id="tools-help" onClick={() => openPopup("help")}><span>Help</span></button>
+                <button type="button" role="menuitem" id="tools-help" onClick={onOpenTutorial || (() => openPopup("help"))}>
+                  <span>Keyboard Shortcuts</span>
+                </button>
               </div>
             ) : null}
           </div>
         </div>
       </header>
 
-      <footer className="classic-bottom-bar source-bottom-bar" aria-label="Exam controls">
-        <div className="classic-footer-left">
+      {/* Footer Toolbar */}
+      <footer className="classic-bottom-bar source-bottom-bar flex items-center justify-between px-3" aria-label="Exam controls">
+        {/* Left: Test ID and Mode */}
+        <div className="classic-footer-left flex items-center gap-3">
+          <div className="text-[12px] font-bold text-white/90 flex items-center gap-2">
+            <span>Test Id: {testId || "200561420"}</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold tracking-wide uppercase bg-[#00897b] text-white">
+              {examMode}
+            </span>
+          </div>
+
           <button type="button" className={`source-timer-trigger ${activePopup === "timer" ? "is-open" : ""}`} onClick={() => togglePopup("timer")} aria-expanded={activePopup === "timer"}>
             <span>Block Time Remaining:</span><strong>{showTimer ? formatClock(timeRemaining) : "untimed"}</strong>
             {showTimer ? <><span>Day Time Remaining:</span><strong>{formatClock(dayRemaining)}</strong></> : null}
@@ -210,92 +339,143 @@ export const ExamHeader = ({
           <button type="button" className="classic-footer-button" onClick={onPause} title="Pause"><Pause aria-hidden="true" /><span>Pause</span></button>
         </div>
 
-        <button type="button" className="classic-footer-button classic-lock-button" onClick={onPause} title="Lock"><LockKeyhole aria-hidden="true" /><span>Lock</span></button>
-        <button type="button" className={`classic-footer-button classic-end-button ${unanswered === 0 ? "is-complete" : ""}`} onClick={() => togglePopup("end")} title="End Block">
-          <span className="classic-end-icon">{unanswered === 0 ? <ChevronRight aria-hidden="true" /> : <X aria-hidden="true" />}</span><span>End Block</span>
-        </button>
+        {/* Right: UWorld Toolbar (Notebook, Flashcards, Feedback, End Block) */}
+        <div className="flex items-center gap-2">
+          {/* Flashcards */}
+          <button
+            type="button"
+            onClick={onOpenFlashcards}
+            className="classic-footer-button flex items-center gap-1.5 text-xs text-white"
+            title="Flashcards"
+          >
+            <Layers className="h-4 w-4 text-[#88cee7]" />
+            <span className="hidden sm:inline">Flashcards</span>
+            <span className="bg-[#2196f3] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+              {flashcardCount}
+            </span>
+          </button>
+
+          {/* Notebook */}
+          <button
+            type="button"
+            onClick={onOpenNotebook}
+            className="classic-footer-button flex items-center gap-1.5 text-xs text-white"
+            title="My Notebook"
+          >
+            <BookOpen className="h-4 w-4 text-[#81c784]" />
+            <span className="hidden sm:inline">My Notebook</span>
+          </button>
+
+          {/* Feedback */}
+          <button
+            type="button"
+            onClick={onOpenFeedback}
+            className="classic-footer-button flex items-center gap-1 text-xs text-white"
+            title="Feedback"
+          >
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">Feedback</span>
+          </button>
+
+          {/* Lock */}
+          <button type="button" className="classic-footer-button classic-lock-button" onClick={onPause} title="Lock">
+            <LockKeyhole aria-hidden="true" /><span>Lock</span>
+          </button>
+
+          {/* End Block */}
+          <button
+            type="button"
+            className={`classic-footer-button classic-end-button ${unanswered === 0 ? "is-complete" : ""}`}
+            onClick={() => togglePopup("end")}
+            title="End Block"
+          >
+            <span className="classic-end-icon">{unanswered === 0 ? <ChevronRight aria-hidden="true" /> : <X aria-hidden="true" />}</span>
+            <span>End Block</span>
+          </button>
+        </div>
       </footer>
 
       {activePopup === "overview" ? (
         <section className="source-overview-panel" role="dialog" aria-modal="false" aria-labelledby="overview-title">
-          <div className="source-panel-heading" id="overview-title">Exam Overview</div>
-          <div className="source-overview-caption">Day 1 of 1</div>
-          <table><thead><tr><th>Block</th><th>Time</th><th>Items</th></tr></thead><tbody>
-            {sections.map((row) => (
-              <tr key={row.block} className={row.block === currentSection ? "is-current" : ""}>
-                <td>{row.completed ? "✓ " : ""}{row.block}</td><td>{formatLongTime(row.durationSeconds)}</td><td>{row.itemCount}</td>
-              </tr>
-            ))}
-          </tbody></table>
+          <div className="source-overview-header">
+            <div className="source-overview-headings">
+              <h2 id="overview-title">Question Overview</h2>
+              <p>Current Block: {currentSection} of {totalSections}</p>
+            </div>
+            <button type="button" className="source-overview-close" onClick={() => closePopup("overview")} aria-label="Close overview">
+              <span className="source-overview-close-icon"><X size={30} /></span><span>Close</span>
+            </button>
+          </div>
+          <div className="source-overview-content">
+            <table className="source-overview-table" aria-label="Section status table">
+              <thead>
+                <tr>
+                  <th scope="col">Block</th>
+                  <th scope="col">Total Items</th>
+                  <th scope="col">Time Limit</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sections.map((section) => (
+                  <tr key={section.block} className={section.block === currentSection ? "is-current-section" : ""}>
+                    <td>Block {section.block}</td>
+                    <td>{section.itemCount}</td>
+                    <td>{formatLongTime(section.durationSeconds)}</td>
+                    <td>{section.completed ? "Completed" : section.block === currentSection ? "In Progress" : "Not Started"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
 
       {activePopup === "timer" ? (
-        <section className="source-timer-panel" role="dialog" aria-modal="false" aria-labelledby="timer-title">
-          <div className="source-panel-heading" id="timer-title">Time Information</div>
-          <div className="source-time-section">
-            <h3>Block {currentSection} of {totalSections}</h3>
-            <dl>
-              <div><dt>Time Remaining</dt><dd>{showTimer ? formatLongTime(timeRemaining) : "untimed"}</dd></div>
-              <div><dt>Elapsed Time</dt><dd>{formatLongTime(blockElapsed)}</dd></div>
-              <div><dt>Length of Block</dt><dd>{showTimer ? formatLongTime(sectionTimeLimitSeconds) : "untimed"}</dd></div>
-            </dl>
+        <section className="source-timer-panel" role="dialog" aria-modal="false" aria-label="Timing Details">
+          <div className="source-timer-header">
+            <h2>Timing Details</h2>
+            <button type="button" className="source-timer-close" onClick={() => closePopup("timer")} aria-label="Close timing details">
+              <span className="source-overview-close-icon"><X size={30} /></span><span>Close</span>
+            </button>
           </div>
-          <div className="source-time-section">
-            <h3>Day 1 of 1</h3>
-            <dl>
-              <div><dt>Time Remaining</dt><dd>{showTimer ? formatLongTime(dayRemaining) : "untimed"}</dd></div>
-              <div><dt>Elapsed Time</dt><dd>{formatLongTime(dayElapsed)}</dd></div>
-              <div><dt>Total Time</dt><dd>{showTimer ? formatLongTime(dayTimeLimitSeconds) : "untimed"}</dd></div>
-              <div><dt>Break Time Remaining</dt><dd>Not available</dd></div>
-            </dl>
+          <div className="source-timer-content">
+            <div className="source-timer-grid">
+              <div className="source-timer-metric"><span>Block Time Remaining</span><strong>{showTimer ? formatClock(timeRemaining) : "Untimed"}</strong></div>
+              <div className="source-timer-metric"><span>Block Time Used</span><strong>{formatClock(blockElapsed)}</strong></div>
+              <div className="source-timer-metric"><span>Day Time Remaining</span><strong>{showTimer ? formatClock(dayRemaining) : "Untimed"}</strong></div>
+              <div className="source-timer-metric"><span>Day Time Used</span><strong>{formatClock(dayElapsed)}</strong></div>
+            </div>
           </div>
         </section>
       ) : null}
 
       {activePopup === "end" ? (
-        <section className="source-end-dialog" role="alertdialog" aria-modal="true" aria-labelledby="source-end-title">
-          <div className="source-panel-heading" id="source-end-title">End Block</div>
-          <div className="source-end-copy">
-            {unanswered > 0 ? <><p>There {unanswered === 1 ? "is" : "are"} still <strong>{unanswered}</strong> incomplete item{unanswered === 1 ? "" : "s"} in this block.</p><p>Are you sure that you wish to end the block?</p></> : <><p>Once you exit this block you will NOT be able to return to any of the items.</p><p>Are you sure that you wish to exit this block?</p></>}
-            {markedInSection > 0 ? <p>You have {markedInSection} marked item{markedInSection === 1 ? "" : "s"}.</p> : null}
-          </div>
-          <div className="source-end-actions"><button type="button" onClick={confirmEndBlock}>End Block</button><button type="button" autoFocus onClick={() => closePopup("end")}>Remain in Block</button></div>
-        </section>
-      ) : null}
-
-      {activePopup === "help" ? (
-        <section id="helpContainer" className="source-help-container source-help-from-driver" role="dialog" aria-label="Help" aria-modal="false">
-          <div className="source-help-handle">
-            <h2>Exam Interface and Features</h2>
-            <button className="source-help-close" type="button" aria-label="Close" title="Close" autoFocus onClick={() => closePopup("help")}>
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2zm3.354 4.646L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 1 1 .708-.708z" /></svg>
-            </button>
-          </div>
-          <div className="source-help-content" tabIndex={0}>
-            <div><h3>Exam Navigation</h3><table><tbody>
-              <tr className="source-help-top"><td colSpan={2}>&nbsp;</td></tr>
-              <tr><td><b>Item Information Panel</b></td><td>Shows an exam overview and sections completed. The current item and block information are already displayed.</td></tr>
-              <tr className="source-help-blue"><td><b>Previous/Next</b></td><td>Move backward or forward one screen.</td></tr>
-              <tr><td><b>Lab Values</b></td><td>Opens a searchable reference containing four categories of laboratory values. SI reference intervals are also available.</td></tr>
-              <tr className="source-help-blue"><td><b>Notes</b></td><td>Add a note to an item.</td></tr>
-              <tr><td><b>Calculator</b></td><td>Opens a basic calculator. To close the calculator, click again.</td></tr>
-            </tbody></table></div>
-            <div><h3>Settings</h3><table><tbody>
-              <tr className="source-help-top"><td><b>Settings</b></td><td>Opens the menu to access the settings detailed below.</td></tr>
-              <tr><td><b>Resize Text</b></td><td>Resizes the text of the exam interface and questions.</td></tr>
-              <tr className="source-help-blue"><td><b>Color Theme</b></td><td>Switches between the default color theme and a dark theme.</td></tr>
-              <tr><td><b>Show/Hide Strikeout</b></td><td>When enabled, displays a strikeout icon next to each answer option.</td></tr>
-              <tr className="source-help-blue"><td><b>Help</b></td><td>Review the information presented in this tutorial for interacting with the exam.</td></tr>
-            </tbody></table></div>
-            <div><h3>Highlight, Strike Out, and Other Features</h3>
-              <p><b>Highlight:</b> Click and drag over text to highlight it in yellow. Click highlighted text to remove highlighting.</p>
-              <p><b>Strikeout:</b> Click the strikeout button to add or remove strikeout from an option, or right click an option. Strikeout is removed from an option if that option is selected as the answer.</p>
-              <p><b>Mark Question:</b> Mark an item to review later if time allows.</p>
-              <p><b>Image Invert:</b> Inverts the colors of images.</p>
-              <p><b>Image Contrast:</b> Adjusts the contrast of images.</p>
-              <p><b>Image Magnification:</b> Allows full-screen magnification of images.</p>
-              <p><b>Timer Panel:</b> Displays additional time summary information, including block and day timing.</p>
+        <section className="source-end-dialog" role="dialog" aria-modal="true" aria-labelledby="end-dialog-title">
+          <div className="source-end-panel">
+            <div className="source-end-header">
+              <h2 id="end-dialog-title">End Block Confirmation</h2>
+              <button type="button" className="source-end-close" onClick={() => closePopup("end")} aria-label="Close dialog">
+                <span className="source-overview-close-icon"><X size={30} /></span><span>Close</span>
+              </button>
+            </div>
+            <div className="source-end-body">
+              <p>Are you sure you want to end this block?</p>
+              <div className="source-end-stats">
+                <div className="source-end-stat"><span>Answered</span><strong>{answeredInSection}</strong></div>
+                <div className="source-end-stat"><span>Unanswered</span><strong>{unanswered}</strong></div>
+                <div className="source-end-stat"><span>Marked</span><strong>{markedInSection}</strong></div>
+                <div className="source-end-stat"><span>Total Items</span><strong>{itemsInSection}</strong></div>
+              </div>
+              {unanswered > 0 ? (
+                <div className="source-end-warning">
+                  ⚠️ You have <strong>{unanswered}</strong> unanswered item{unanswered > 1 ? "s" : ""} in this block.
+                </div>
+              ) : null}
+            </div>
+            <div className="source-end-actions">
+              <button type="button" className="source-end-cancel" onClick={() => closePopup("end")}>Cancel</button>
+              <button type="button" className="source-end-confirm" onClick={confirmEndBlock}>Yes, End Block</button>
             </div>
           </div>
         </section>

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Contrast, Flag, Search, X } from "lucide-react";
+import { Contrast, Flag, Search, X, Award, BarChart2 } from "lucide-react";
 import { Question } from "@/data/examQuestions";
 import { OptionButton } from "./OptionButton";
 import { useExamUI } from "./ExamUIProvider";
+import { ContextualMenu } from "./coursology/ContextualMenu";
 
 interface QuestionCardProps {
   question: Question;
@@ -20,6 +21,8 @@ interface QuestionCardProps {
   highlights?: string[];
   onAddHighlight?: (text: string) => void;
   onRemoveHighlight?: (text: string) => void;
+  onAddFlashcard?: (text: string) => void;
+  onAddNotebook?: (text: string) => void;
 }
 
 type ImageTool = "invert" | "contrast" | null;
@@ -39,6 +42,8 @@ export const QuestionCard = ({
   highlights = [],
   onAddHighlight,
   onRemoveHighlight,
+  onAddFlashcard,
+  onAddNotebook,
 }: QuestionCardProps) => {
   const { activePopup, openPopup, closePopup } = useExamUI();
   const isZoomOpen = activePopup === "zoom";
@@ -52,6 +57,10 @@ export const QuestionCard = ({
   const [invertEnabled, setInvertEnabled] = useState(false);
   const [contrastEnabled, setContrastEnabled] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+
+  // Contextual Selection Menu State
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [selectedText, setSelectedText] = useState("");
 
   useEffect(() => {
     if (wasZoomOpenRef.current && !isZoomOpen) {
@@ -68,6 +77,8 @@ export const QuestionCard = ({
     setContrastValue(0);
     setInvertEnabled(false);
     setContrastEnabled(false);
+    setContextMenuPos(null);
+    setSelectedText("");
     if (isZoomOpen) closePopup("zoom");
   }, [question.id]);
 
@@ -84,7 +95,7 @@ export const QuestionCard = ({
       return (
         <mark
           key={`${index}-${part.slice(0, 12)}`}
-          className="classic-highlight"
+          className="classic-highlight cursor-pointer"
           title="Click to remove highlight"
           onClick={(event) => {
             event.stopPropagation();
@@ -97,17 +108,31 @@ export const QuestionCard = ({
     });
   }, [question.stem, highlights, onRemoveHighlight]);
 
-  const handleStemMouseUp = () => {
-    if (!onAddHighlight || showExplanation || isZoomOpen) return;
+  const handleSelectionMouseUp = () => {
+    if (isZoomOpen) return;
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || !stemRef.current) return;
-    const anchor = selection.anchorNode;
-    const focus = selection.focusNode;
-    if (!anchor || !focus || !stemRef.current.contains(anchor) || !stemRef.current.contains(focus)) return;
+    if (!selection || selection.isCollapsed) {
+      setContextMenuPos(null);
+      setSelectedText("");
+      return;
+    }
+
     const text = selection.toString().trim();
-    if (text.length < 2 || text.length > 240) return;
-    onAddHighlight(text);
-    selection.removeAllRanges();
+    if (text.length < 2 || text.length > 350) {
+      setContextMenuPos(null);
+      setSelectedText("");
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      setContextMenuPos({
+        x: rect.left + rect.width / 2,
+        y: rect.top,
+      });
+      setSelectedText(text);
+    }
   };
 
   const invertPercent = invertEnabled ? ((invertValue + 100) / 200) * 100 : 0;
@@ -139,90 +164,99 @@ export const QuestionCard = ({
     const enabled = isInvert ? invertEnabled : contrastEnabled;
     const setValue = isInvert ? setInvertValue : setContrastValue;
     const setEnabled = isInvert ? setInvertEnabled : setContrastEnabled;
-    const reset = isInvert ? resetInvert : resetContrast;
+    const min = isInvert ? -100 : 0;
+    const max = 100;
+    const label = isInvert ? "Invert" : "Contrast";
 
     return (
-      <div className={`source-image-slider source-image-slider-${tool}`}>
-        <div className="source-image-slider-title">{isInvert ? "Invert" : "Contrast"}</div>
-        <div className="source-image-slider-track-wrap">
+      <div className="source-slider-popover" role="dialog" aria-label={`${label} control`}>
+        <div className="source-slider-content">
+          <label className="source-slider-check">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            <span>Enable</span>
+          </label>
           <input
-            aria-label={`${isInvert ? "Invert" : "Contrast"} adjustment`}
             type="range"
-            min="-100"
-            max="100"
-            step="1"
+            min={min}
+            max={max}
+            step={1}
             value={value}
-            onChange={(event) => setValue(Number(event.target.value))}
+            disabled={!enabled}
+            onChange={(e) => setValue(Number(e.target.value))}
+            aria-label={`${label} level`}
           />
+          <button
+            type="button"
+            className="source-slider-reset"
+            onClick={isInvert ? resetInvert : resetContrast}
+            disabled={!enabled && value === min}
+          >
+            Reset
+          </button>
         </div>
-        <label className="source-image-slider-toggle">
-          On/Off
-          <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
-        </label>
-        <button type="button" className="source-image-slider-reset" onClick={reset}>Reset</button>
       </div>
     );
   };
 
-  const inertProps = isZoomOpen ? ({ inert: "" } as any) : {};
-
   return (
     <>
+      {/* Contextual Selection Menu */}
+      <ContextualMenu
+        position={contextMenuPos}
+        selectedText={selectedText}
+        onHighlight={(text) => {
+          onAddHighlight?.(text);
+          window.getSelection()?.removeAllRanges();
+          setContextMenuPos(null);
+        }}
+        onAddFlashcard={(text) => {
+          onAddFlashcard?.(text);
+          setContextMenuPos(null);
+        }}
+        onAddNotebook={(text) => {
+          onAddNotebook?.(text);
+          setContextMenuPos(null);
+        }}
+        onClose={() => setContextMenuPos(null)}
+      />
+
       <motion.div
-        {...inertProps}
         key={question.id}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.08 }}
-        className="classic-question-card"
-        aria-hidden={isZoomOpen ? true : undefined}
+        transition={{ duration: 0.15 }}
+        className="classic-exam-content"
       >
-        {canMark ? (
-          <label className={`classic-question-mark ${isFlagged ? "is-marked" : ""}`}>
-            <input type="checkbox" checked={isFlagged} onChange={() => onFlag?.()} aria-label="Mark question" />
-            <Flag size={15} strokeWidth={1.8} aria-hidden="true" />
-            <span>Mark Question</span>
-          </label>
-        ) : null}
+        <div className="classic-stem-area" onMouseUp={handleSelectionMouseUp}>
+          <div className="classic-stem-main">
+            <div ref={stemRef} className="classic-stem-text">
+              {highlightedStem}
+            </div>
 
-        <div ref={stemRef} className="classic-question-stem" onMouseUp={handleStemMouseUp}>
-          <span className="classic-question-number">{displayNumber}.</span>
-          <div>
-            {typeof question.stem === "string" && /<[a-z][\s\S]*>/i.test(question.stem) ? (
-              <div
-                className="qbank-rich-content text-left"
-                dangerouslySetInnerHTML={{ __html: question.stem }}
-              />
-            ) : (
-              <p>{highlightedStem}</p>
-            )}
             {question.image ? (
-              <figure className="classic-question-image">
-                <div className="classic-image-frame source-media-gallery">
-                  <div className="classic-image-tools" aria-label="Image tools">
-                    <div className="source-image-tool-wrap">
+              <figure className="classic-image-container">
+                <div className="classic-image-frame">
+                  <div className="classic-image-tools" role="toolbar" aria-label="Image display tools">
+                    <div className="classic-image-tool-anchor">
                       <button
                         type="button"
-                        className={activeImageTool === "invert" ? "is-active" : ""}
                         aria-pressed={activeImageTool === "invert"}
-                        onClick={() => setActiveImageTool((value) => value === "invert" ? null : "invert")}
+                        onClick={() => setActiveImageTool((c) => (c === "invert" ? null : "invert"))}
                         title="Invert"
                       >
-                        <span className="classic-invert-icon" aria-hidden="true" /><span>Invert</span>
+                        <Contrast size={29} strokeWidth={1.8} /><span>Invert</span>
                       </button>
                       {activeImageTool === "invert" ? renderSlider("invert") : null}
                     </div>
 
-                    <div className="source-image-tool-wrap">
+                    <div className="classic-image-tool-anchor">
                       <button
                         type="button"
-                        className={activeImageTool === "contrast" ? "is-active" : ""}
                         aria-pressed={activeImageTool === "contrast"}
-                        onClick={() => setActiveImageTool((value) => value === "contrast" ? null : "contrast")}
+                        onClick={() => setActiveImageTool((c) => (c === "contrast" ? null : "contrast"))}
                         title="Contrast"
                       >
-                        <Contrast size={28} strokeWidth={1.8} /><span>Contrast</span>
+                        <Contrast size={29} strokeWidth={1.8} /><span>Contrast</span>
                       </button>
                       {activeImageTool === "contrast" ? renderSlider("contrast") : null}
                     </div>
@@ -242,6 +276,7 @@ export const QuestionCard = ({
           </div>
         </div>
 
+        {/* Answer Choices */}
         <div className="classic-options" role="radiogroup" aria-label="Answer choices">
           {question.options.map((option) => (
             <OptionButton
@@ -255,30 +290,73 @@ export const QuestionCard = ({
               disabled={showExplanation}
               isStrikethrough={strikethroughs.has(`${question.id}-${option.label}`)}
               onToggleStrikethrough={() => onToggleStrikethrough(option.label)}
+              peerPercent={
+                showExplanation
+                  ? option.peerPercent ??
+                    (question.peerStats ? question.peerStats[option.label] : undefined)
+                  : undefined
+              }
             />
           ))}
         </div>
 
         {!showExplanation && onNext ? (
-          <div className="classic-proceed-row"><button type="button" className="classic-proceed-button" onClick={onNext}>Proceed to Next Item</button></div>
+          <div className="classic-proceed-row">
+            <button type="button" className="classic-proceed-button" onClick={onNext}>
+              Proceed to Next Item
+            </button>
+          </div>
         ) : null}
 
+        {/* UWorld Tutor/Review Mode Explanation Box */}
         {showExplanation ? (
-          <div className={`classic-explanation ${isCorrect ? "correct" : "incorrect"}`}>
-            <strong>{isCorrect ? "Correct" : `Correct answer: ${question.correctAnswer}`}</strong>
-            {typeof question.explanation === "string" && /<[a-z][\s\S]*>/i.test(question.explanation) ? (
-              <div
-                className="qbank-rich-content text-left my-2"
-                dangerouslySetInnerHTML={{ __html: question.explanation }}
-              />
-            ) : (
-              <p>{question.explanation}</p>
-            )}
-            <p><strong>Educational Objective:</strong> {question.educationalObjective}</p>
+          <div className="mt-8 border border-[#e0e0e0] rounded-lg overflow-hidden bg-white shadow-sm" onMouseUp={handleSelectionMouseUp}>
+            {/* Header / Tabs */}
+            <div className="bg-[#f5f7fa] border-b border-[#e0e0e0] px-4 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-[#004976]">Explanation</span>
+                {question.qid && (
+                  <span className="text-xs bg-[#e3f2fd] text-[#0277bd] font-semibold px-2 py-0.5 rounded">
+                    QID: {question.qid}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${isCorrect ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                  {isCorrect ? "Correct" : `Correct Answer: ${question.correctAnswer}`}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Explanation Text */}
+              {typeof question.explanation === "string" && /<[a-z][\s\S]*>/i.test(question.explanation) ? (
+                <div
+                  className="qbank-rich-content text-left text-sm text-[#333] leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: question.explanation }}
+                />
+              ) : (
+                <p className="text-sm text-[#333] leading-relaxed whitespace-pre-wrap">{question.explanation}</p>
+              )}
+
+              {/* Educational Objective Box */}
+              {question.educationalObjective && (
+                <div className="mt-5 border-l-4 border-l-[#2196f3] bg-[#f0f7ff] p-4 rounded-r-md">
+                  <div className="flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider text-[#0277bd] mb-1">
+                    <Award className="h-4 w-4" />
+                    <span>Educational Objective</span>
+                  </div>
+                  <p className="text-sm text-[#263238] font-medium leading-normal">
+                    {question.educationalObjective}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         ) : null}
       </motion.div>
 
+      {/* Magnified Image Modal */}
       {isZoomOpen && question.image ? (
         <section className="source-image-viewer" role="dialog" aria-modal="false" aria-label="Magnified image">
           <div className="source-viewer-toolbar" role="group" aria-label="Image zoom controls">

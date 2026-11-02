@@ -9,6 +9,10 @@ export type ExamPopup =
   | "overview"
   | "end"
   | "zoom"
+  | "flashcards"
+  | "notebook"
+  | "feedback"
+  | "tutorial"
   | null;
 
 interface ExamUIContextValue {
@@ -26,7 +30,9 @@ interface ExamUIContextValue {
   toggleCalculator: () => void;
   setShowStrikeout: (show: boolean) => void;
   setTextZoom: (zoom: 100 | 125 | 150 | 200) => void;
+  cycleTextZoom: () => void;
   setDarkTheme: (dark: boolean) => void;
+  toggleDarkTheme: () => void;
 }
 
 const ExamUIContext = createContext<ExamUIContextValue | null>(null);
@@ -108,6 +114,19 @@ export const ExamUIProvider = ({ children }: { children: ReactNode }) => {
     else openCalculator();
   };
 
+  const cycleTextZoom = () => {
+    setTextZoom((current) => {
+      if (current === 100) return 125;
+      if (current === 125) return 150;
+      if (current === 150) return 200;
+      return 100;
+    });
+  };
+
+  const toggleDarkTheme = () => {
+    setDarkTheme((current) => !current);
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -144,7 +163,9 @@ export const ExamUIProvider = ({ children }: { children: ReactNode }) => {
     toggleCalculator,
     setShowStrikeout,
     setTextZoom,
+    cycleTextZoom,
     setDarkTheme,
+    toggleDarkTheme,
   }), [activePopup, calculatorOpen, showStrikeout, textZoom, darkTheme, suspendedPopup]);
 
   return <ExamUIContext.Provider value={value}>{children}</ExamUIContext.Provider>;
